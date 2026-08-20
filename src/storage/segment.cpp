@@ -6,7 +6,8 @@
 Segment::Segment(const std::string &path) : filepath(path), filesize(0) // member initializer list
 {
 
-    file.open(filepath, std::ios::in | std::ios::out | std::ios::binary | std::ios::app); // why do we use ios::in and ios::out
+    // using binary stream so we can directly manipulate where each byte is stored in memory
+    file.open(filepath, std::ios::in | std::ios::out | std::ios::binary | std::ios::app); 
 
     if (!file.is_open())
     {
@@ -43,16 +44,18 @@ size_t Segment::write(const Record &record)
     // 1 bytes
     char tombstone = record.tombstone ? 1 : 0; // storing byte values directly
 
-    // Struggling to understand this
-    file.write(&tombstone, 1); // why are we writing the memory address
+    // Go to the memory address of tombstone
+    // take one byte from memory address 
+    // send said byte into the stream
+    file.write(&tombstone, 1); 
 
     file.write(record.key.data(), record.key.size()); // write key to file
 
     file.write(record.value.data(), record.value.size()); // write data to file
 
-    file.flush(); // For durability?
+    file.flush(); // For durability
 
-    filesize += 4 + 4 + 1 + record.value.size() + record.value.size(); // why do we use hardcoded values of 4, 4 and 1
+    filesize += 4 + 4 + 1 + record.key.size() + record.value.size(); 
 
     return offset; // returns where the particular record starts?
 };
@@ -75,7 +78,9 @@ std::optional<Record> Segment::read(size_t offset)
     file.read(&tombstone_byte, 1); // what does this do?
 
     // Read key
-    std::string key(key_size, '\0'); // create a key string (constructor) filled with null bytes and of size key_size
+    // create a key string (constructor) filled with null bytes and of size key_size
+    // explicitly stating '\0' but passing in 0 is valid as well
+    std::string key(key_size, '\0'); 
     file.read(key.data(), key.size());
 
     // Read value

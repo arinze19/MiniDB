@@ -18,7 +18,7 @@ public:
      */
     ~MiniDB() = default;
 
-    void put(const std::string &key, const std::string &value); // const here means the function promises not to change the value right?
+    void put(const std::string &key, const std::string &value);
 
     std::optional<std::string> get(const std::string &key);
 
@@ -26,9 +26,12 @@ public:
 
 private:
     std::string data_dir;
-    std::unique_ptr<Segment> segment; // what does unique_ptr do?
+    // with following setup we can opt to
+    // create segment at another part in our program initializer list
+    // taking advantage of unique_ptr as well so we can dynamically create/delete segments when compacting
+    std::unique_ptr<Segment> segment;
 
-    std::unordered_map<std::string, size_t> hash_index; // this is basically like a python list right?
+    std::unordered_map<std::string, size_t> hash_index;
 
     void buildHashIndex(); // build index once segment starts up
 };

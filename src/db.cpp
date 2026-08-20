@@ -10,7 +10,9 @@ MiniDB::MiniDB(const std::string &dir) : data_dir(dir)
     }
 
     std::string segment_path = data_dir + "/data.seg";
-    segment = std::make_unique<Segment>(segment_path); // what does this do? | doesn't seem to have a return type initially
+    // create a segment using the segment path
+    // is .seg a recognized file format or could it have been end extension? -> for all we know the segment.seg file represents the class from segment.cpp
+    segment = std::make_unique<Segment>(segment_path);
 
     // Build index
     buildHashIndex();
@@ -31,15 +33,26 @@ void MiniDB::put(const std::string &key, const std::string &value)
 std::optional<std::string> MiniDB::get(const std::string &key)
 {
     // check if key exists in index
-    auto index = hash_index.find(key); // is this how we find if a key exists in a hash_index
+    // returns an iterator
+    // using auto here so iterator type is automatically inferred as opposed to writing out the whole type of the map
+    auto index = hash_index.find(key);
 
-    if (index == hash_index.end()) // why does it get to end? | is the hash_index.find function an O(n) algorithm?
+    // maps must return a value regardless
+    // so in the instance where key is not found
+    // it returns an iterator pointing to the sentinel just after the end of the map
+    // also if an item is not in the index it is most likely tombstoned
+    if (index == hash_index.end())
     {
         return std::nullopt;
     };
 
-    auto record = segment->read(index->second); // what is index->second and index->first
+    // index->second references the value of the key selected above
+    // using auto since it returns optional
+    auto record = segment->read(index->second);
 
+    // we could probably do with a !record.has_value()
+    // here but that's severely underestimating the accuracy of our
+    // database
     if (record->tombstone)
     {
         return std::nullopt;
@@ -71,27 +84,21 @@ bool MiniDB::remove(const std::string &key)
 void MiniDB::buildHashIndex()
 {
     // get all records from the segment? what if there are multiple segments
-    std::vector<Record> records = segment->readAll(); // tutorial uses auto here, why?
+    auto records = segment->readAll();
+    size_t offset = 0;
 
-    // append to hash index
-    for (size_t i = 0; i < records.size(); i++)
+    for (const auto &record : records)
     {
-        const auto &record = records[i]; // why do we get the reference here?
-
         if (record.tombstone)
         {
-            hash_index.erase(record.key);
-            // so since a tombstone comes after the key we want to remove the key from the index
-            // could we end up with a state where the the record key might not be in the hash_index? after compaction perhaps?
+            hash_index.erase(record.key); // what does erase do?
         }
         else
         {
-            size_t offset = 0;
-            for (size_t j = 0; j < i; j++)
-            {
-                offset += 4 + 4 + 1 + records[i].key.size() + records[i].value.size();
-            }
             hash_index[record.key] = offset;
         }
+
+        // update offset
+        offset += 4 + 4 + 1 + record.key.size() + record.value.size();
     }
 }

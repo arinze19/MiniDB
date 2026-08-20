@@ -7,7 +7,8 @@ void printHelp()
     std::cout << "\n=== MiniDB Commands ===\n";
     std::cout << "  set <key> <value>  - Store a key-value pair\n";
     std::cout << "  get <key>          - Retrieve a value\n";
-    std::cout << "  del <key>          - Delete a key\n";
+    std::cout << "  remove <key>       - Delete a key\n";
+    std::cout << "  clear              - Clear Terminal\n";
     std::cout << "  help               - Show this message\n";
     std::cout << "  exit               - Quit MiniDB\n";
     std::cout << "=======================\n\n";
@@ -50,7 +51,7 @@ int main()
                 std::cout << "(nil)\n";
             }
         }
-        else if (current_command == "del")
+        else if (current_command == "remove")
         {
             std::string key;
             std::cin >> key;
@@ -65,6 +66,10 @@ int main()
         {
             std::cout << "Goodbye!\n";
             break;
+        }
+        else if (current_command == "clear")
+        {
+            std::cout << "\033[2J\033[1;1H" << std::flush; // flushes the output buffer
         }
         else
         {
