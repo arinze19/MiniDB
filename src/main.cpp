@@ -14,13 +14,33 @@ void printHelp()
     std::cout << "=======================\n\n";
 }
 
-int main()
+// terminal flags | Didn't know about that
+int main(int argc, char *argv[])
 {
-    std::cout << "=== MiniDB v0.1 ===\n";
+    std::cout << "=== MiniDB v0.2 ===\n";
     std::cout << "Type 'help' for commands\n\n";
 
+    // Parse --index flag from CLI
+    // Usage: ./minidb --index=hash  or  ./minidb --index=btree
+    MiniDB::IndexType indexType = MiniDB::IndexType::HASH; // Default to hash
+
+    for (int i = 1; i < argc; i++)
+    {
+        std::string arg = argv[i];
+        if (arg == "--index=btree")
+        {
+            indexType = MiniDB::IndexType::BTREE;
+            std::cout << "[MiniDB] Using BTree index\n";
+        }
+        else if (arg == "--index=hash")
+        {
+            indexType = MiniDB::IndexType::HASH;
+            std::cout << "[MiniDB] Using Hash index\n";
+        }
+    }
+
     // open database
-    MiniDB db("./data");
+    MiniDB db("./data", indexType);
 
     std::string current_command;
 
@@ -61,6 +81,22 @@ int main()
         else if (current_command == "help")
         {
             printHelp();
+        }
+        else if (current_command == "keys")
+        {
+            auto all_keys = db.keys(); // get all keys
+
+            if (all_keys.empty())
+            {
+                std::cout << "(Empty) \n";
+            }
+            else
+            {
+                for (size_t i = 0; i < all_keys.size(); i++)
+                {
+                    std::cout << i + 1 << ") " << all_keys[i] << "\n";
+                }
+            }
         }
         else if (current_command == "exit")
         {

@@ -2,12 +2,30 @@
 #include <filesystem>
 #include <iostream>
 
-MiniDB::MiniDB(const std::string &dir) : data_dir(dir)
+// Factory: Creates the right index type
+// What is a factory?
+std::unique_ptr<Index> MiniDB::createIndex(IndexType type)
+{
+    switch (type)
+    {
+    case IndexType::HASH:
+        return std::make_unique<HashIndex>();
+    case IndexType::BTREE:
+        throw std::runtime_error("BTree Indexing not supported yet!");
+    default:
+        std::cout << "Index type is unknown - Defaulting to HashIndex" << std::endl;
+        return std::make_unique<HashIndex>();
+    }
+}
+
+MiniDB::MiniDB(const std::string &dir, IndexType type) : data_dir(dir)
 {
     if (!std::filesystem::exists(data_dir))
     {
         std::filesystem::create_directories(data_dir);
     }
+
+    index = createIndex(type); // create index type
 
     std::string segment_path = data_dir + "/data.seg";
     // create a segment using the segment path
@@ -15,10 +33,10 @@ MiniDB::MiniDB(const std::string &dir) : data_dir(dir)
     segment = std::make_unique<Segment>(segment_path);
 
     // Build index
-    buildHashIndex();
+    buildIndex();
 
     std::cout << "Database loaded at " << data_dir << "\n";
-    std::cout << "Index loaded with " << hash_index.size() << "\n";
+    std::cout << "Index loaded with " << index->size() << "\n";
 }
 
 void MiniDB::put(const std::string &key, const std::string &value)
@@ -27,7 +45,7 @@ void MiniDB::put(const std::string &key, const std::string &value)
 
     size_t offset = segment->write(record);
 
-    hash_index[key] = offset; // setting hash keys
+    index->put(key, offset); // setting index keys
 }
 
 std::optional<std::string> MiniDB::get(const std::string &key)
@@ -35,25 +53,23 @@ std::optional<std::string> MiniDB::get(const std::string &key)
     // check if key exists in index
     // returns an iterator
     // using auto here so iterator type is automatically inferred as opposed to writing out the whole type of the map
-    auto index = hash_index.find(key);
+    auto offset = index->get(key);
 
     // maps must return a value regardless
     // so in the instance where key is not found
     // it returns an iterator pointing to the sentinel just after the end of the map
     // also if an item is not in the index it is most likely tombstoned
-    if (index == hash_index.end())
+    if (!offset.has_value())
     {
         return std::nullopt;
     };
 
-    // index->second references the value of the key selected above
     // using auto since it returns optional
-    auto record = segment->read(index->second);
+    auto record = segment->read(*offset); // why do we have to use *offset for this?
 
-    // we could probably do with a !record.has_value()
-    // here but that's severely underestimating the accuracy of our
-    // database
-    if (record->tombstone)
+    // adding !record.has_value() here to
+    // prevent invalid state crashes in the system
+    if (record->tombstone || !record.has_value())
     {
         return std::nullopt;
     }
@@ -64,7 +80,7 @@ std::optional<std::string> MiniDB::get(const std::string &key)
 bool MiniDB::remove(const std::string &key)
 {
     // null case
-    if (hash_index.find(key) == hash_index.end())
+    if (!index->contains(key))
     {
         std::cout << "[MiniDB]: Key not found" << "\n";
         return false;
@@ -76,12 +92,18 @@ bool MiniDB::remove(const std::string &key)
     size_t offset = segment->write(tombstone);
 
     // update index
-    hash_index[key] = offset;
+    index->put(key, offset);
 
     return true;
 }
 
-void MiniDB::buildHashIndex()
+std::vector<std::string> MiniDB::keys() const
+{
+    // get the keys in the index
+    return index->keys();
+}
+
+void MiniDB::buildIndex()
 {
     // get all records from the segment? what if there are multiple segments
     auto records = segment->readAll();
@@ -91,11 +113,11 @@ void MiniDB::buildHashIndex()
     {
         if (record.tombstone)
         {
-            hash_index.erase(record.key); // what does erase do?
+            index->remove(record.key); // what does erase do?
         }
         else
         {
-            hash_index[record.key] = offset;
+            index->put(record.key, offset);
         }
 
         // update offset

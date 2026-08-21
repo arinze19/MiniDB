@@ -3,13 +3,22 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <unordered_map>
 #include "storage/segment.h"
+#include "index/hash_index.h"
 
 class MiniDB
 {
 public:
-    explicit MiniDB(const std::string &data_dir);
+    // Determine index type to use for DB
+    enum class IndexType
+    {
+        HASH,
+        BTREE
+    };
+
+    // create DB with chosen index
+    // defaulting to hash indexing
+    explicit MiniDB(const std::string &data_dir, IndexType index = IndexType::HASH);
 
     /**
      * If your class is meant to be inherited from,
@@ -24,14 +33,22 @@ public:
 
     bool remove(const std::string &key);
 
+    // Index information
+    size_t indexSize() const;
+
+    std::vector<std::string> keys() const;
+
 private:
     std::string data_dir;
     // with following setup we can opt to
     // create segment at another part in our program initializer list
     // taking advantage of unique_ptr as well so we can dynamically create/delete segments when compacting
     std::unique_ptr<Segment> segment;
+    std::unique_ptr<Index> index;
 
-    std::unordered_map<std::string, size_t> hash_index;
+    void buildIndex();
 
-    void buildHashIndex(); // build index once segment starts up
+    // Factory method - creates the right index type
+    // what is "static" - only MiniDB can call this method
+    static std::unique_ptr<Index> createIndex(IndexType type);
 };
