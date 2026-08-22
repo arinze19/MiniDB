@@ -2,13 +2,18 @@
 #include <string>
 #include "db.h"
 
-void printHelp()
+void printHelp(MiniDB::IndexType type)
 {
     std::cout << "\n=== MiniDB Commands ===\n";
     std::cout << "  set <key> <value>  - Store a key-value pair\n";
     std::cout << "  get <key>          - Retrieve a value\n";
-    std::cout << "  remove <key>       - Delete a key\n";
+    std::cout << "  del <key>       - Delete a key\n";
+    std::cout << "  keys               - Retrieve all keys\n";
     std::cout << "  clear              - Clear Terminal\n";
+    if (type == MiniDB::IndexType::BTREE)
+    {
+        std::cout << " range <start> <end> - Get all keys in a certain range (inclusive of start and end) \n";
+    }
     std::cout << "  help               - Show this message\n";
     std::cout << "  exit               - Quit MiniDB\n";
     std::cout << "=======================\n\n";
@@ -71,16 +76,41 @@ int main(int argc, char *argv[])
                 std::cout << "(nil)\n";
             }
         }
-        else if (current_command == "remove")
+        else if (current_command == "del")
         {
             std::string key;
             std::cin >> key;
             db.remove(key);
             std::cout << "OK\n";
         }
+        else if (current_command == "range")
+        {
+            std::string start, end; // similar to python first, second = 0, 0?
+            std::cin >> start >> end;
+
+            try
+            {
+                auto results = db.range(start, end);
+                if (results.empty())
+                {
+                    std::cout << "(no results)\n";
+                }
+                else
+                {
+                    for (const auto &[key, value] : results)
+                    {
+                        std::cout << key << "->" << value << "\n";
+                    }
+                }
+            }
+            catch (const std::exception &e)
+            {
+                std::cout << "Error: " << e.what() << "\n";
+            }
+        }
         else if (current_command == "help")
         {
-            printHelp();
+            printHelp(indexType);
         }
         else if (current_command == "keys")
         {

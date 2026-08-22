@@ -1,6 +1,9 @@
 #include "db.h"
+#include "index/btree_index.h"
+#include "index/hash_index.h"
 #include <filesystem>
 #include <iostream>
+#include <stdexcept> // provides cpp exception type: std::runtime_error
 
 // Factory: Creates the right index type
 // What is a factory?
@@ -11,7 +14,7 @@ std::unique_ptr<Index> MiniDB::createIndex(IndexType type)
     case IndexType::HASH:
         return std::make_unique<HashIndex>();
     case IndexType::BTREE:
-        throw std::runtime_error("BTree Indexing not supported yet!");
+        return std::make_unique<BTreeIndex>();
     default:
         std::cout << "Index type is unknown - Defaulting to HashIndex" << std::endl;
         return std::make_unique<HashIndex>();
@@ -35,8 +38,9 @@ MiniDB::MiniDB(const std::string &dir, IndexType type) : data_dir(dir)
     // Build index
     buildIndex();
 
-    std::cout << "Database loaded at " << data_dir << "\n";
-    std::cout << "Index loaded with " << index->size() << "\n";
+    std::cout << "[MiniDB] Opened with"
+              << (type == IndexType::HASH ? "HashIndex" : "BTreeIndex")
+              << " | " << index->size() << " keys loaded \n";
 }
 
 void MiniDB::put(const std::string &key, const std::string &value)
@@ -61,6 +65,7 @@ std::optional<std::string> MiniDB::get(const std::string &key)
     // also if an item is not in the index it is most likely tombstoned
     if (!offset.has_value())
     {
+        std::cout << "[MiniDB] key not found: " << key << "\n";
         return std::nullopt;
     };
 
@@ -92,7 +97,7 @@ bool MiniDB::remove(const std::string &key)
     size_t offset = segment->write(tombstone);
 
     // update index
-    index->put(key, offset);
+    index->put(key, offset); // why do we still hold on to the keys after deleting?
 
     return true;
 }
@@ -101,6 +106,43 @@ std::vector<std::string> MiniDB::keys() const
 {
     // get the keys in the index
     return index->keys();
+}
+
+std::vector<std::pair<std::string, std::string>> MiniDB::range(const std::string &start, const std::string &end)
+{
+    // what is index.get()? does this get you the smart pointer?
+    // .get() -> verifies gives access to the raw pointer
+    // dynamic_cast -> need more explanation for dynamic cast
+    //  -> returns a null pointer if the object isn't the requested type?
+    // dynamic_cast v static_cast
+    //  dynamic runs at runtime
+    //  static
+    auto *btree = dynamic_cast<BTreeIndex *>(index.get());
+
+    if (!btree)
+    {
+        throw std::runtime_error(
+            "Range queries require BTreeIndex! "
+            "Restart with --index=btree");
+    }
+
+    auto pairs = btree->range(start, end);
+
+    // reserver space for incoming items
+    std::vector<std::pair<std::string, std::string>> result;
+    result.reserve(pairs.size());
+
+    for (const auto &[key, offset] : pairs)
+    {
+        auto record = segment->read(offset);
+
+        if (record.has_value() && !record->tombstone)
+        {
+            result.emplace_back(key, record->value);
+        }
+    }
+
+    return result;
 }
 
 void MiniDB::buildIndex()

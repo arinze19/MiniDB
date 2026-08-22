@@ -33,10 +33,18 @@ public:
 
     bool remove(const std::string &key);
 
+    // BTree Index Only
+    std::vector<std::pair<std::string, std::string>> range(const std::string &start, const std::string &end);
+
     // Index information
     size_t indexSize() const;
 
     std::vector<std::string> keys() const;
+
+    // getter function to return private variables
+    // by returning here; we explicitly tell the program not to bother to redefine in .cpp file?
+    // common for small getters
+    IndexType getIndexType() const { return index_type; };
 
 private:
     std::string data_dir;
@@ -45,6 +53,7 @@ private:
     // taking advantage of unique_ptr as well so we can dynamically create/delete segments when compacting
     std::unique_ptr<Segment> segment;
     std::unique_ptr<Index> index;
+    IndexType index_type;
 
     void buildIndex();
 
