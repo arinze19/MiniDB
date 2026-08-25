@@ -1,13 +1,14 @@
 #include "segment.h"
 #include <iostream>
 #include <stdexcept> // try-catch?
+#include <filesystem>
 
 // Constructor
 Segment::Segment(const std::string &path) : filepath(path), filesize(0) // member initializer list
 {
 
     // using binary stream so we can directly manipulate where each byte is stored in memory
-    file.open(filepath, std::ios::in | std::ios::out | std::ios::binary | std::ios::app); 
+    file.open(filepath, std::ios::in | std::ios::out | std::ios::binary | std::ios::app);
 
     if (!file.is_open())
     {
@@ -45,9 +46,9 @@ size_t Segment::write(const Record &record)
     char tombstone = record.tombstone ? 1 : 0; // storing byte values directly
 
     // Go to the memory address of tombstone
-    // take one byte from memory address 
+    // take one byte from memory address
     // send said byte into the stream
-    file.write(&tombstone, 1); 
+    file.write(&tombstone, 1);
 
     file.write(record.key.data(), record.key.size()); // write key to file
 
@@ -55,7 +56,7 @@ size_t Segment::write(const Record &record)
 
     file.flush(); // For durability
 
-    filesize += 4 + 4 + 1 + record.key.size() + record.value.size(); 
+    filesize += 4 + 4 + 1 + record.key.size() + record.value.size();
 
     return offset; // returns where the particular record starts?
 };
@@ -80,7 +81,7 @@ std::optional<Record> Segment::read(size_t offset)
     // Read key
     // create a key string (constructor) filled with null bytes and of size key_size
     // explicitly stating '\0' but passing in 0 is valid as well
-    std::string key(key_size, '\0'); 
+    std::string key(key_size, '\0');
     file.read(key.data(), key.size());
 
     // Read value
@@ -148,6 +149,22 @@ uint32_t Segment::readUint32()
 size_t Segment::size() const
 {
     return filesize;
+}
+
+// Validate if segment is full
+bool Segment::isFull(size_t max_size) const
+{
+    return filesize >= max_size;
+}
+
+void Segment::deleteFile()
+{
+    if (file.is_open())
+    {
+        file.close();
+    };
+
+    std::filesystem::remove(filepath);
 }
 
 // Get file path

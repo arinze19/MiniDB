@@ -33,6 +33,7 @@ MiniDB::MiniDB(const std::string &dir, IndexType type) : data_dir(dir)
     std::string segment_path = data_dir + "/data.seg";
     // create a segment using the segment path
     // is .seg a recognized file format or could it have been end extension? -> for all we know the segment.seg file represents the class from segment.cpp
+    // could be made with Segment* segment = new Segment(segment_path) but using this to better manage memory leaks if we forget to delete segment
     segment = std::make_unique<Segment>(segment_path);
 
     // Build index
@@ -111,12 +112,11 @@ std::vector<std::string> MiniDB::keys() const
 std::vector<std::pair<std::string, std::string>> MiniDB::range(const std::string &start, const std::string &end)
 {
     // what is index.get()? does this get you the smart pointer?
-    // .get() -> verifies gives access to the raw pointer
-    // dynamic_cast -> need more explanation for dynamic cast
-    //  -> returns a null pointer if the object isn't the requested type?
+    // .get() -> gives access to the raw pointer
+    //  dynamic returns a null pointer if the object isn't the requested type?
     // dynamic_cast v static_cast
-    //  dynamic runs at runtime
-    //  static
+    //  dynamic -> runs type check at runtime | used for safely navigating polymorphic class hierarchies
+    //  static -> runs type check at compile time
     auto *btree = dynamic_cast<BTreeIndex *>(index.get());
 
     if (!btree)
