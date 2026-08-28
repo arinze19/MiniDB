@@ -5,6 +5,18 @@
 #include <iostream>
 #include <stdexcept> // provides cpp exception type: std::runtime_error
 
+size_t MiniDB::encodeLocation(size_t segment_idx, size_t offset) const
+{
+    return (segment_idx << 32) | (offset & 0xFFFFFFFF);
+}
+
+std::pair<size_t, size_t> MiniDB::decodeLocation(size_t encoded) const
+{
+    size_t segment_idx = encoded >> 32;
+    size_t offset = encoded & 0xFFFFFFFF;
+    return {segment_idx, offset};
+}
+
 // Factory: Creates the right index type
 // What is a factory?
 std::unique_ptr<Index> MiniDB::createIndex(IndexType type)
@@ -34,23 +46,24 @@ MiniDB::MiniDB(const std::string &dir, IndexType type) : data_dir(dir)
     // create a segment using the segment path
     // is .seg a recognized file format or could it have been end extension? -> for all we know the segment.seg file represents the class from segment.cpp
     // could be made with Segment* segment = new Segment(segment_path) but using this to better manage memory leaks if we forget to delete segment
-    segment = std::make_unique<Segment>(segment_path);
+    segment_manager = std::make_unique<SegmentManager>(segment_path);
 
     // Build index
     buildIndex();
 
     std::cout << "[MiniDB] Opened with"
               << (type == IndexType::HASH ? "HashIndex" : "BTreeIndex")
-              << " | " << index->size() << " keys loaded \n";
+              << " | Keys: " << index->size() << " keys loaded \n"
+              << " | Segments: " << segment_manager->segmentCount() << std::endl;
 }
 
 void MiniDB::put(const std::string &key, const std::string &value)
 {
     Record record = Record{key, value, false}; // is this how we define objects
 
-    size_t offset = segment->write(record);
+    auto [segment_idx, offset] = segment_manager->write(record);
 
-    index->put(key, offset); // setting index keys
+    index->put(key, encodeLocation(segment_idx, offset)); // setting index keys
 }
 
 std::optional<std::string> MiniDB::get(const std::string &key)
@@ -58,20 +71,24 @@ std::optional<std::string> MiniDB::get(const std::string &key)
     // check if key exists in index
     // returns an iterator
     // using auto here so iterator type is automatically inferred as opposed to writing out the whole type of the map
-    auto offset = index->get(key);
+    // auto offset = index->get(key);
+    auto encoded = index->get(key);
 
     // maps must return a value regardless
     // so in the instance where key is not found
     // it returns an iterator pointing to the sentinel just after the end of the map
     // also if an item is not in the index it is most likely tombstoned
-    if (!offset.has_value())
+    if (!encoded.has_value())
     {
         std::cout << "[MiniDB] key not found: " << key << "\n";
         return std::nullopt;
     };
 
     // using auto since it returns optional
-    auto record = segment->read(*offset); // why do we have to use *offset for this?
+    // auto record = segment->read(*offset)
+    auto [segment_idx, offset] = decodeLocation(*encoded);
+
+    auto record = segment_manager->read(segment_idx, offset);
 
     // adding !record.has_value() here to
     // prevent invalid state crashes in the system
@@ -95,18 +112,13 @@ bool MiniDB::remove(const std::string &key)
     Record tombstone{key, "", true};
 
     // add to db
-    size_t offset = segment->write(tombstone);
+    auto [segment_idx, offset] = segment_manager->write(tombstone);
 
     // update index
-    index->put(key, offset); // why do we still hold on to the keys after deleting?
+    // index->put(key, offset);
+    index->remove(key);
 
     return true;
-}
-
-std::vector<std::string> MiniDB::keys() const
-{
-    // get the keys in the index
-    return index->keys();
 }
 
 std::vector<std::pair<std::string, std::string>> MiniDB::range(const std::string &start, const std::string &end)
@@ -132,9 +144,11 @@ std::vector<std::pair<std::string, std::string>> MiniDB::range(const std::string
     std::vector<std::pair<std::string, std::string>> result;
     result.reserve(pairs.size());
 
-    for (const auto &[key, offset] : pairs)
+    for (const auto &[key, encoded] : pairs)
     {
-        auto record = segment->read(offset);
+        auto [segment_idx, offset] = decodeLocation(encoded);
+
+        auto record = segment_manager->read(segment_idx, offset);
 
         if (record.has_value() && !record->tombstone)
         {
@@ -148,10 +162,10 @@ std::vector<std::pair<std::string, std::string>> MiniDB::range(const std::string
 void MiniDB::buildIndex()
 {
     // get all records from the segment? what if there are multiple segments
-    auto records = segment->readAll();
-    size_t offset = 0;
+    auto segments = segment_manager->readAll();
+    size_t current_offset = 0;
 
-    for (const auto &record : records)
+    for (const auto &[segment_idx, offset, record] : segments)
     {
         if (record.tombstone)
         {
@@ -159,10 +173,31 @@ void MiniDB::buildIndex()
         }
         else
         {
-            index->put(record.key, offset);
+            index->put(record.key, encodeLocation(segment_idx, offset));
         }
 
         // update offset
-        offset += 4 + 4 + 1 + record.key.size() + record.value.size();
+        current_offset += 4 + 4 + 1 + record.key.size() + record.value.size();
     }
+}
+
+void MiniDB::compact()
+{
+    segment_manager->compact(*index);
+}
+
+size_t MiniDB::indexSize() const
+{
+    return index->size();
+}
+
+size_t MiniDB::getSegmentCount() const
+{
+    return segment_manager->segmentCount();
+}
+
+std::vector<std::string> MiniDB::keys() const
+{
+    // get the keys in the index
+    return index->keys();
 }

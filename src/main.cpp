@@ -7,8 +7,10 @@ void printHelp(MiniDB::IndexType type)
     std::cout << "\n=== MiniDB Commands ===\n";
     std::cout << "  set <key> <value>  - Store a key-value pair\n";
     std::cout << "  get <key>          - Retrieve a value\n";
-    std::cout << "  del <key>       - Delete a key\n";
+    std::cout << "  del <key>          - Delete a key\n";
     std::cout << "  keys               - Retrieve all keys\n";
+    std::cout << "  compact            - Compact (Merge + Clean) segments\n";
+    std::cout << "  stats              - Show DB statistics\n";
     std::cout << "  clear              - Clear Terminal\n";
     if (type == MiniDB::IndexType::BTREE)
     {
@@ -107,6 +109,18 @@ int main(int argc, char *argv[])
             {
                 std::cout << "Error: " << e.what() << "\n";
             }
+        }
+        else if (current_command == "compact")
+        {
+            std::cout << "[MiniDB]: Starting compaction process..." << std::endl;
+            db.compact();
+            std::cout << "[MiniDB]: Finished compaction process, segments count now " << db.getSegmentCount() << std::endl;
+        }
+        else if (current_command == "stats")
+        {
+            std::cout << "Keys: " << db.indexSize() << "\n";
+            std::cout << "Segments: " << db.getSegmentCount() << "\n";
+            std::cout << "Index Type: " << (indexType == MiniDB::IndexType::BTREE ? "BTree" : "Hash") << " index" << "\n";
         }
         else if (current_command == "help")
         {

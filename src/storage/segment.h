@@ -22,7 +22,7 @@ class Segment
 public:
     explicit Segment(const std::string &path); // explicit keyword forces construction call
 
-    ~Segment(); 
+    ~Segment() = default; 
 
     size_t write(const Record &record);
 

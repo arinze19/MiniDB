@@ -19,15 +19,6 @@ Segment::Segment(const std::string &path) : filepath(path), filesize(0) // membe
     filesize = file.tellg();      // do we need to specify as
 }
 
-// Destructor
-Segment::~Segment()
-{
-    if (file.is_open())
-    {
-        file.close();
-    }
-}
-
 // Write to disk
 size_t Segment::write(const Record &record)
 {

@@ -50,7 +50,7 @@ private:
     // Return raw pointer
     Segment *getActiveSegment();
 
-    void addSegment();
+    void addNewSegment();
 
     void loadAllSegments();
 
@@ -58,10 +58,14 @@ private:
     std::string segmentPath(size_t idx) const;
 
     // Background compaction thread
+    // Enable compaction process to be non-blocking
     std::thread compaction_thread;
     // Thread safe boolean
     // What is atomic?
     std::atomic<bool> should_stop{false}; 
+    // Lock
+    // Experiment with RAII lock
+    // std::lock_guard<std::mutex> lock(segments_mutex);
     mutable std::mutex segments_mutex;
 
     // Background loop
