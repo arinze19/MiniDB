@@ -57,6 +57,7 @@ std::optional<Record> Segment::read(size_t offset)
     // jump to offset of file
     file.seekg(offset);
 
+    // if file cursor out of bound
     if (file.fail())
     {
         return std::nullopt; // offset out of bound
@@ -72,11 +73,12 @@ std::optional<Record> Segment::read(size_t offset)
     // Read key
     // create a key string (constructor) filled with null bytes and of size key_size
     // explicitly stating '\0' but passing in 0 is valid as well
+    // starting from the first address of key (key.data()), read the file up to key.size()
     std::string key(key_size, '\0');
     file.read(key.data(), key.size());
 
     // Read value
-    std::string value(value_size, '\0'); // create a value string (constructor) filled with null bytes and of size value_size
+    std::string value(value_size, '\0');
     file.read(value.data(), value.size());
 
     if (file.fail())
@@ -112,9 +114,9 @@ std::vector<Record> Segment::readAll()
     return records;
 }
 
+// Write as big endian to support cross platform compatibility
 void Segment::writeUint32(uint32_t value)
 {
-    // TOOO: Inspect
     char bytes[4] = {
         static_cast<char>((value >> 24) & 0xFF), // shift all bits to the right (24 spaces) and and keep last 8 bits
         static_cast<char>((value >> 16) & 0xFF), // shift all bits to the right (16 spaces) and and keep last 8 bits
@@ -124,6 +126,7 @@ void Segment::writeUint32(uint32_t value)
     file.write(bytes, 4);
 }
 
+// Read as big endian to support cross platform compatibility
 uint32_t Segment::readUint32()
 {
     // TOOO: Inspect

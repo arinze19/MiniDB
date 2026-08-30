@@ -12,7 +12,9 @@ SegmentManager::SegmentManager(const std::string &directory) : data_dir(director
     // load segments
     if (!std::filesystem::exists(data_dir))
     {
-        std::filesystem::create_directories(data_dir); // difference between using create_directory and this
+        // create_directories - can create directories if they don't already exist 
+        // create_directory - requires the directory to already exist
+        std::filesystem::create_directories(data_dir); 
     }
 
     loadAllSegments();
@@ -29,7 +31,7 @@ SegmentManager::~SegmentManager()
 {
     should_stop = true;
 
-    // What does this do?
+    // Prevent SegmentManager from destroying if background thread still active
     if (compaction_thread.joinable())
     {
         compaction_thread.join();
@@ -162,11 +164,12 @@ void SegmentManager::compact(Index &index)
     std::cout << "[SegmentManager] Compaction complete! " << index.size() << " records retained" << std::endl;
 }
 
+// This runs in the background while program is not active??
 void SegmentManager::compactionLoop(Index *index)
 {
     while (!should_stop)
     {
-        // What does this mean?
+        // Sleep for 30s (1s interval) as long as should_stop not enabled
         for (int i = 0; i < 30 && !should_stop; i++)
         {
             std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -177,27 +180,24 @@ void SegmentManager::compactionLoop(Index *index)
 
         // Check if we have enough segments to warrant compaction
         size_t count;
+        // By putting lock in this block we keep it scoped since we don't need it outside this block
+        // TODO: what if we didn't add this to a block
         {
             std::lock_guard<std::mutex> lock(segments_mutex);
-            count = segments.size();
+            count = segments.size(); 
         }
 
         if (count >= COMPACTION_THRESHOLD)
         {
             std::cout << "[SegmentManager] Auto-compacting "
                       << count << " segments...\n";
-            compact(*index);
+            compact(*index); // there is a lock in here as well
         }
     }
 }
 
 std::string SegmentManager::segmentPath(size_t idx) const
 {
-    // std::string file_name = "segment" + "" + ".seg"; // pad left on the index
-    // std::fstream file;
-
-    // file.open(file_name, std::ios::app | std::ios::binary | std::ios::in | std::ios::out);
-
     std::ostringstream oss;
     oss << data_dir << "/segment_" << std::setw(4) << std::setfill('0') << idx << ".seg"; // what does this do
     return oss.str();
@@ -226,17 +226,17 @@ void SegmentManager::loadAllSegments()
         }
     }
 
-    std::sort(paths.begin(), paths.end()); // TODO: How does this work?
+    // iterate in descending order: std::sort(paths.begin(), paths.end(), std::greater<std::string>())
+    std::sort(paths.begin(), paths.end());
 
     for (const auto &path : paths)
     {
         segments.push_back(std::make_unique<Segment>(path));
-        std::cout << "[SegmentManager] Loaded " << path << std::endl;
     }
 }
 
 size_t SegmentManager::segmentCount() const
 {
-    std::lock_guard<std::mutex> lock(segments_mutex);
-    return segments.size(); // does the lock automatically release after return?
+    std::lock_guard<std::mutex> lock(segments_mutex); // mutex unlocks after function goes out of scope
+    return segments.size(); 
 }

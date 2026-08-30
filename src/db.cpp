@@ -5,6 +5,7 @@
 #include <iostream>
 #include <stdexcept> // provides cpp exception type: std::runtime_error
 
+// TODO: Insepct
 size_t MiniDB::encodeLocation(size_t segment_idx, size_t offset) const
 {
     return (segment_idx << 32) | (offset & 0xFFFFFFFF);
@@ -59,7 +60,7 @@ MiniDB::MiniDB(const std::string &dir, IndexType type) : data_dir(dir)
 
 void MiniDB::put(const std::string &key, const std::string &value)
 {
-    Record record = Record{key, value, false}; // is this how we define objects
+    Record record = Record{key, value, false}; 
 
     auto [segment_idx, offset] = segment_manager->write(record);
 
@@ -115,7 +116,7 @@ bool MiniDB::remove(const std::string &key)
     auto [segment_idx, offset] = segment_manager->write(tombstone);
 
     // update index
-    // index->put(key, offset);
+    // index working accross multiple segments
     index->remove(key);
 
     return true;
