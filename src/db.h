@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include "storage/segment_manager.h"
+#include "storage/memtable.h"
 #include "index/hash_index.h"
 
 class MiniDB
@@ -16,8 +17,6 @@ public:
         BTREE
     };
 
-    // create DB with chosen index
-    // defaulting to hash indexing
     explicit MiniDB(const std::string &data_dir, IndexType index = IndexType::HASH);
 
     /**
@@ -33,11 +32,9 @@ public:
 
     bool remove(const std::string &key);
 
-    // BTree Index Only
     std::vector<std::pair<std::string, std::string>> range(const std::string &start, const std::string &end);
 
-    // Index information
-    size_t indexSize() const;
+    size_t indexSize() const; // TODO: convert to getIndexSize to maintain consistency
 
     std::vector<std::string> keys() const;
 
@@ -48,7 +45,11 @@ public:
 
     void compact(); // Manually trigger compaction if needed (auto-runs in background)
 
+    void flushMemtable(); // Manually flush memtable
+
     size_t getSegmentCount() const;
+
+    size_t getMemtableSize() const;
 
 private:
     std::string data_dir;
@@ -57,7 +58,9 @@ private:
     // taking advantage of unique_ptr as well so we can dynamically create/delete segments when compacting
     std::unique_ptr<SegmentManager> segment_manager;
     std::unique_ptr<Index> index;
+    std::unique_ptr<Memtable> memtable;
     IndexType index_type;
+    mutable std::mutex db_mutex;
 
     // Index now tracks <segment_idx, offset>
     // we encode both into a single size_t for simplicity
@@ -67,7 +70,8 @@ private:
 
     void buildIndex();
 
-    // Factory method - creates the right index type
-    // what is "static" - only MiniDB can call this method
+    void flushMemtableInternal(); // Why not same as call in public
+
+    // TODO: what is factory method
     static std::unique_ptr<Index> createIndex(IndexType type);
 };

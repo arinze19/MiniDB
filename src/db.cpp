@@ -18,8 +18,6 @@ std::pair<size_t, size_t> MiniDB::decodeLocation(size_t encoded) const
     return {segment_idx, offset};
 }
 
-// Factory: Creates the right index type
-// What is a factory?
 std::unique_ptr<Index> MiniDB::createIndex(IndexType type)
 {
     switch (type)
@@ -41,15 +39,11 @@ MiniDB::MiniDB(const std::string &dir, IndexType type) : data_dir(dir)
         std::filesystem::create_directories(data_dir);
     }
 
-    index = createIndex(type); // create index type
+    index = createIndex(type);
 
     std::string segment_path = data_dir + "/data.seg";
-    // create a segment using the segment path
-    // is .seg a recognized file format or could it have been end extension? -> for all we know the segment.seg file represents the class from segment.cpp
-    // could be made with Segment* segment = new Segment(segment_path) but using this to better manage memory leaks if we forget to delete segment
     segment_manager = std::make_unique<SegmentManager>(segment_path);
 
-    // Build index
     buildIndex();
 
     std::cout << "[MiniDB] Opened with"
@@ -60,76 +54,109 @@ MiniDB::MiniDB(const std::string &dir, IndexType type) : data_dir(dir)
 
 void MiniDB::put(const std::string &key, const std::string &value)
 {
-    Record record = Record{key, value, false}; 
+    std::lock_guard<std::mutex> lock(db_mutex);
 
-    auto [segment_idx, offset] = segment_manager->write(record);
+    memtable->put(key, value);
 
-    index->put(key, encodeLocation(segment_idx, offset)); // setting index keys
+    if (memtable->isFull())
+    {
+        std::cout << "[MiniDB] Memtable full, flushing to disk... " << std::endl;
+
+        flushMemtableInternal();
+    }
 }
 
 std::optional<std::string> MiniDB::get(const std::string &key)
 {
-    // check if key exists in index
-    // returns an iterator
-    // using auto here so iterator type is automatically inferred as opposed to writing out the whole type of the map
-    // auto offset = index->get(key);
+    if (memtable->contains(key))
+    {
+        return memtable->get(key);
+    }
+
+    // index scan
     auto encoded = index->get(key);
 
-    // maps must return a value regardless
-    // so in the instance where key is not found
-    // it returns an iterator pointing to the sentinel just after the end of the map
-    // also if an item is not in the index it is most likely tombstoned
     if (!encoded.has_value())
     {
         std::cout << "[MiniDB] key not found: " << key << "\n";
         return std::nullopt;
     };
 
-    // using auto since it returns optional
-    // auto record = segment->read(*offset)
     auto [segment_idx, offset] = decodeLocation(*encoded);
 
     auto record = segment_manager->read(segment_idx, offset);
 
-    // adding !record.has_value() here to
-    // prevent invalid state crashes in the system
     if (record->tombstone || !record.has_value())
     {
+        std::cout << "[MiniDB] key not found: " << key << "\n";
         return std::nullopt;
-    }
+    };
 
     return record->value;
 }
 
 bool MiniDB::remove(const std::string &key)
 {
-    // null case
-    if (!index->contains(key))
+    std::lock_guard<std::mutex> lock(db_mutex);
+
+    if (!memtable->contains(key) && !index->contains(key))
     {
-        std::cout << "[MiniDB]: Key not found" << "\n";
+        std::cout << "[MiniDB] key not found..." << std::endl;
         return false;
     }
 
-    Record tombstone{key, "", true};
+    memtable->remove(key); // when flushed tombstone will supress on disk record
 
-    // add to db
-    auto [segment_idx, offset] = segment_manager->write(tombstone);
+    if (index->contains(key))
+    {
+        index->remove(key);
+    }
 
-    // update index
-    // index working accross multiple segments
-    index->remove(key);
+    if (memtable->isFull())
+    {
+        flushMemtableInternal();
+    }
 
     return true;
 }
 
+void MiniDB::flushMemtableInternal()
+{
+    if (memtable->isEmpty())
+        return;
+
+    std::vector<Record> records = memtable->flush();
+
+    size_t first_segment_idx = segment_manager->segmentCount();
+
+    for (const auto &record : records)
+    {
+        auto [segment_idx, offset] = segment_manager->write(record);
+
+        if (record.tombstone)
+        {
+            index->remove(record.key);
+        }
+        else
+        {
+            index->put(record.key, encodeLocation(segment_idx, offset));
+        }
+    }
+
+    std::cout << "[MiniDB] Memtable flushed successfully..." << std::endl;
+
+    memtable->clear();
+}
+
+// TODO: why expose flush memtable - why not just call flush memtable internal
+void MiniDB::flushMemtable()
+{
+    std::lock_guard<std::mutex> lock(db_mutex);
+    flushMemtableInternal();
+}
+
 std::vector<std::pair<std::string, std::string>> MiniDB::range(const std::string &start, const std::string &end)
 {
-    // what is index.get()? does this get you the smart pointer?
-    // .get() -> gives access to the raw pointer
-    //  dynamic returns a null pointer if the object isn't the requested type?
-    // dynamic_cast v static_cast
-    //  dynamic -> runs type check at runtime | used for safely navigating polymorphic class hierarchies
-    //  static -> runs type check at compile time
     auto *btree = dynamic_cast<BTreeIndex *>(index.get());
 
     if (!btree)
@@ -142,48 +169,70 @@ std::vector<std::pair<std::string, std::string>> MiniDB::range(const std::string
     auto pairs = btree->range(start, end);
 
     // reserver space for incoming items
-    std::vector<std::pair<std::string, std::string>> result;
-    result.reserve(pairs.size());
+    std::map<std::string, std::string> result; // why move from std::vector<std::pair<std::string, std::string>>
 
     for (const auto &[key, encoded] : pairs)
     {
-        auto [segment_idx, offset] = decodeLocation(encoded);
-
-        auto record = segment_manager->read(segment_idx, offset);
-
-        if (record.has_value() && !record->tombstone)
+        if (memtable->contains(key))
         {
-            result.emplace_back(key, record->value);
+            auto entity = memtable->get(key);
+
+            if (entity.has_value())
+                result[key] = *entity;
+        }
+        else
+        {
+            auto [segment_idx, offset] = decodeLocation(encoded);
+            auto record = segment_manager->read(segment_idx, offset);
+
+            if (record.has_value() && !record->tombstone)
+            {
+                result[key] = record->value;
+            }
         }
     }
 
-    return result;
+    // ====================== TODO: Inspect ======================
+    // Also check memtable for keys in range not yet on disk
+    // (These won't be in the btree index yet!)
+    // Note: This is a simplified approach - production LSMs have
+    // a separate memtable iterator for this
+    auto flushed = memtable->flush();
+    for (const auto &record : flushed)
+    {
+        if (!record.tombstone && record.key >= start && record.key <= end)
+        {
+            result[record.key] = record.value;
+        }
+    }
+    // ==================================================================
+
+    return {result.begin(), result.end()}; // TODO: Inspect
 }
 
 void MiniDB::buildIndex()
 {
-    // get all records from the segment? what if there are multiple segments
-    auto segments = segment_manager->readAll();
-    size_t current_offset = 0;
+    auto all_records = segment_manager->readAll();
 
-    for (const auto &[segment_idx, offset, record] : segments)
+    for (const auto &[segment_idx, offset, record] : all_records)
     {
         if (record.tombstone)
         {
-            index->remove(record.key); // what does erase do?
+            index->remove(record.key);
         }
         else
         {
             index->put(record.key, encodeLocation(segment_idx, offset));
         }
-
-        // update offset
-        current_offset += 4 + 4 + 1 + record.key.size() + record.value.size();
     }
 }
 
 void MiniDB::compact()
 {
+    {
+        std::lock_guard<std::mutex> lock(db_mutex);
+        flushMemtableInternal();
+    }
     segment_manager->compact(*index);
 }
 
@@ -201,4 +250,9 @@ std::vector<std::string> MiniDB::keys() const
 {
     // get the keys in the index
     return index->keys();
+}
+
+size_t MiniDB::getMemtableSize() const
+{
+    return memtable->sizeBytes();
 }

@@ -10,6 +10,7 @@ void printHelp(MiniDB::IndexType type)
     std::cout << "  del <key>          - Delete a key\n";
     std::cout << "  keys               - Retrieve all keys\n";
     std::cout << "  compact            - Compact (Merge + Clean) segments\n";
+    std::cout << "  flush              - Flush memtable to disk\n";
     std::cout << "  stats              - Show DB statistics\n";
     std::cout << "  clear              - Clear Terminal\n";
     if (type == MiniDB::IndexType::BTREE)
@@ -84,6 +85,14 @@ int main(int argc, char *argv[])
             std::cin >> key;
             db.remove(key);
             std::cout << "OK\n";
+        }
+        else if (current_command == "flush")
+        {
+            std::cout << "Flushing memtable..."
+                      << std::endl;
+            db.flushMemtable();
+            std::cout
+                << "Done!" << std::endl;
         }
         else if (current_command == "range")
         {
