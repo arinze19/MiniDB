@@ -6,7 +6,6 @@
 #include <cstdint>
 
 // default segment size 
-// compile time constant - stand alone constant which is shared
 static constexpr size_t DEFAULT_MAX_SEGMENT_SIZE = 1024 * 1024;
 
 // [key_size(4 bytes)][value_size(4 bytes)][tombstone(1 byte)][key][value]
@@ -14,7 +13,7 @@ struct Record
 {
     std::string key;
     std::string value;
-    bool tombstone = false; // default tombstone to false
+    bool tombstone = false;
 };
 
 class Segment

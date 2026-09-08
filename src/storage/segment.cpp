@@ -1,25 +1,23 @@
 #include "segment.h"
 #include <iostream>
-#include <stdexcept> // try-catch?
+#include <stdexcept>
 #include <filesystem>
 
 // Constructor
 Segment::Segment(const std::string &path) : filepath(path), filesize(0) // member initializer list
 {
 
-    // using binary stream so we can directly manipulate where each byte is stored in memory
     file.open(filepath, std::ios::in | std::ios::out | std::ios::binary | std::ios::app);
 
     if (!file.is_open())
     {
-        throw std::runtime_error("Failed to open file segment: " + filepath); // is this enabled by <stdexcept>
+        throw std::runtime_error("Failed to open file segment: " + filepath);
     };
 
-    file.seekg(0, std::ios::end); // move read pointer to end of file
-    filesize = file.tellg();      // do we need to specify as
+    file.seekg(0, std::ios::end);
+    filesize = file.tellg();
 }
 
-// Write to disk
 size_t Segment::write(const Record &record)
 {
     size_t offset = filesize;
@@ -41,15 +39,15 @@ size_t Segment::write(const Record &record)
     // send said byte into the stream
     file.write(&tombstone, 1);
 
-    file.write(record.key.data(), record.key.size()); // write key to file
+    file.write(record.key.data(), record.key.size());
 
-    file.write(record.value.data(), record.value.size()); // write data to file
+    file.write(record.value.data(), record.value.size());
 
     file.flush(); // For durability
 
     filesize += 4 + 4 + 1 + record.key.size() + record.value.size();
 
-    return offset; // returns where the particular record starts?
+    return offset;
 };
 
 std::optional<Record> Segment::read(size_t offset)
@@ -93,7 +91,7 @@ std::vector<Record> Segment::readAll()
 {
     std::vector<Record> records;
 
-    file.clear(); // clears previously used flags on the file stream
+    file.clear(); // clears previously used flags on the file stream | mainly for error states if any was encountered
     file.seekg(0, std::ios::beg);
 
     size_t pos = 0;
@@ -105,8 +103,6 @@ std::vector<Record> Segment::readAll()
         if (!record.has_value())
             break;
 
-        // advance position
-        // why do we use arrow here? I think we use the arrow because record is essentially a
         pos += 4 + 4 + 1 + record->key.size() + record->value.size();
         records.push_back(*record); // dereferencing to get actual values into the application
     }

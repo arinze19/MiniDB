@@ -40,7 +40,7 @@ SegmentManager::~SegmentManager()
 
 Segment *SegmentManager::getActiveSegment()
 {
-    return segments.back().get(); // what if segments be empty?
+    return segments.back().get(); // specifically designed to return a raw pointer
 }
 
 std::pair<size_t, size_t> SegmentManager::write(const Record &record)
@@ -140,7 +140,7 @@ void SegmentManager::compact(Index &index)
         segment->deleteFile();
     }
 
-    // Clean up segments
+    // Clean up segments vector
     segments.clear();
 
     // Rename compacted file
@@ -231,7 +231,7 @@ void SegmentManager::loadAllSegments()
 
     for (const auto &path : paths)
     {
-        segments.push_back(std::make_unique<Segment>(path));
+        segments.push_back(std::make_unique<Segment>(path)); // keeps segment constant in one file location while resizing pointer address
     }
 }
 

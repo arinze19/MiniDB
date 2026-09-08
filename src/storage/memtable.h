@@ -9,8 +9,6 @@
 // write into memtable then periodically write into segment
 static constexpr size_t DEAULT_MAX_MEMTABLE_SIZE = 4 * 1024 * 1024;
 
-// what's your emotions like today
-
 class Memtable
 {
 public:

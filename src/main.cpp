@@ -28,8 +28,6 @@ int main(int argc, char *argv[])
     std::cout << "=== MiniDB v0.2 ===\n";
     std::cout << "Type 'help' for commands\n\n";
 
-    // Parse --index flag from CLI
-    // Usage: ./minidb --index=hash  or  ./minidb --index=btree
     MiniDB::IndexType indexType = MiniDB::IndexType::HASH; // Default to hash
 
     for (int i = 1; i < argc; i++)
@@ -47,7 +45,6 @@ int main(int argc, char *argv[])
         }
     }
 
-    // open database
     MiniDB db("./data", indexType);
 
     std::string current_command;
@@ -137,7 +134,7 @@ int main(int argc, char *argv[])
         }
         else if (current_command == "keys")
         {
-            auto all_keys = db.keys(); // get all keys
+            auto all_keys = db.keys();
 
             if (all_keys.empty())
             {

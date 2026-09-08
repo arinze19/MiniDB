@@ -2,7 +2,7 @@
 
 void BTreeIndex::put(const std::string &key, size_t offset)
 {
-    tree[key] = offset; // what does the tree balance by? key or offset?
+    tree[key] = offset;
 }
 
 std::optional<size_t> BTreeIndex::get(const std::string &key) const

@@ -43,7 +43,6 @@ private:
     std::string data_dir;
 
     // Get all segments
-    // Can put smart pointers in a vector?? 😳
     std::vector<std::unique_ptr<Segment>> segments;
 
     // Active segment writing to; default to last to keep readable
@@ -66,7 +65,7 @@ private:
     // Lock
     // Experiment with RAII lock
     // std::lock_guard<std::mutex> lock(segments_mutex);
-    mutable std::mutex segments_mutex;
+    mutable std::mutex segments_mutex; // allows variable to be modified by class members defined as const
 
     // Background loop
     void compactionLoop(Index *index);

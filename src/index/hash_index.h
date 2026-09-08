@@ -3,8 +3,6 @@
 #include "index.h"
 #include <unordered_map>
 
-// we can have private Index too where the properties inherited from Index would be private to this class? Inspect
-// can abstract class have private member variables?
 class HashIndex : public Index
 {
 public:
