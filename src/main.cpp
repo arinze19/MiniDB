@@ -12,6 +12,7 @@ void printHelp(MiniDB::IndexType type)
     std::cout << "  compact            - Compact (Merge + Clean) segments\n";
     std::cout << "  flush              - Flush memtable to disk\n";
     std::cout << "  stats              - Show DB statistics\n";
+    std::cout << "  crash              - Simulate crash (WAL testing)\n";
     std::cout << "  clear              - Clear Terminal\n";
     if (type == MiniDB::IndexType::BTREE)
     {
@@ -126,7 +127,15 @@ int main(int argc, char *argv[])
         {
             std::cout << "Keys: " << db.indexSize() << "\n";
             std::cout << "Segments: " << db.getSegmentCount() << "\n";
+            std::cout << "Memtable: " << db.getMemtableSize() << "\n";
+            std::cout << "WAL: " << db.getWALSize() << "\n";
             std::cout << "Index Type: " << (indexType == MiniDB::IndexType::BTREE ? "BTree" : "Hash") << " index" << "\n";
+        }
+        else if (current_command == "crash")
+        {
+            std::cout << "Simulating crash to test WAL capabilities \n";
+            std::cout << "WAL has " << db.getWALSize() << " bytes to recover \n";
+            std::exit(1);
         }
         else if (current_command == "help")
         {

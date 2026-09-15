@@ -48,7 +48,7 @@ private:
         bool tombstone = false;
     };
 
-    std::map<std::string, Entry> table; // why need to be sorted
+    std::map<std::string, Entry> table; // sorting in order to keep sorted order in SSTable when flushed to disk
 
     size_t max_size;
     size_t current_size;

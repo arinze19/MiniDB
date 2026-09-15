@@ -1,6 +1,7 @@
 #include "db.h"
 #include "index/btree_index.h"
 #include "index/hash_index.h"
+#include "storage/wal.h"
 #include <filesystem>
 #include <iostream>
 #include <stdexcept> // provides cpp exception type: std::runtime_error
@@ -40,21 +41,26 @@ MiniDB::MiniDB(const std::string &dir, IndexType type) : data_dir(dir)
     }
 
     index = createIndex(type);
-
-    std::string segment_path = data_dir + "/data.seg";
-    segment_manager = std::make_unique<SegmentManager>(segment_path);
+    segment_manager = std::make_unique<SegmentManager>(data_dir);
+    memtable = std::make_unique<Memtable>();
+    wal = std::make_unique<WAL>(data_dir + "/wal.log");
 
     buildIndex();
 
+    recoverFromWAL();
+
     std::cout << "[MiniDB] Opened with"
               << (type == IndexType::HASH ? "HashIndex" : "BTreeIndex")
-              << " | Keys: " << index->size() << " keys loaded \n"
-              << " | Segments: " << segment_manager->segmentCount() << std::endl;
+              << " | Keys: " << index->size() << " keys loaded" << std::endl
+              << " | Segments: " << segment_manager->segmentCount() << std::endl
+              << " | WAL: " << wal->size() << "Bytes" << std::endl;
 }
 
 void MiniDB::put(const std::string &key, const std::string &value)
 {
     std::lock_guard<std::mutex> lock(db_mutex);
+
+    wal->logPut(key, value);
 
     memtable->put(key, value);
 
@@ -105,6 +111,8 @@ bool MiniDB::remove(const std::string &key)
         return false;
     }
 
+    wal->logDelete(key);
+
     memtable->remove(key); // when flushed tombstone will supress on disk record
 
     if (index->contains(key))
@@ -146,6 +154,8 @@ void MiniDB::flushMemtableInternal()
     std::cout << "[MiniDB] Memtable flushed successfully..." << std::endl;
 
     memtable->clear();
+
+    wal->clear();
 }
 
 // TODO: why expose flush memtable - why not just call flush memtable internal
@@ -227,6 +237,34 @@ void MiniDB::buildIndex()
     }
 }
 
+void MiniDB::recoverFromWAL()
+{
+    if (wal->isEmpty())
+        return;
+
+    std::cout << "[WAL] Crash recovery detected! Replaying WAL..." << std::endl;
+
+    auto records = wal->replay();
+
+    for (const auto &record : records)
+    {
+        if (record.tombstone)
+        {
+            memtable->remove(record.key);
+            index->remove(record.key);
+        }
+        else
+        {
+            memtable->put(record.key, record.value);
+        }
+    }
+
+    std::cout << "[WAL] Recovery complete! "
+              << records.size() << " entries restored to memtable\n";
+
+    // clear wal after memtable flushed
+}
+
 void MiniDB::compact()
 {
     {
@@ -255,4 +293,9 @@ std::vector<std::string> MiniDB::keys() const
 size_t MiniDB::getMemtableSize() const
 {
     return memtable->sizeBytes();
+}
+
+size_t MiniDB::getWALSize() const
+{
+    return wal->size();
 }

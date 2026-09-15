@@ -5,6 +5,7 @@
 #include <string>
 #include "storage/segment_manager.h"
 #include "storage/memtable.h"
+#include "storage/wal.h"
 #include "index/hash_index.h"
 
 class MiniDB
@@ -49,6 +50,8 @@ public:
 
     size_t getSegmentCount() const;
 
+    size_t getWALSize() const;
+
     size_t getMemtableSize() const;
 
 private:
@@ -57,6 +60,7 @@ private:
     // create a segment manager at another part in our program initializer list
     // taking advantage of unique_ptr as well so we can dynamically create/delete segments when compacting
     std::unique_ptr<SegmentManager> segment_manager;
+    std::unique_ptr<WAL> wal;
     std::unique_ptr<Index> index;
     std::unique_ptr<Memtable> memtable;
     IndexType index_type;
@@ -68,10 +72,12 @@ private:
     size_t encodeLocation(size_t segment_idx, size_t offset) const;
     std::pair<size_t, size_t> decodeLocation(size_t encoded) const;
 
+    void recoverFromWAL();
+
     void buildIndex();
 
     void flushMemtableInternal(); // Why not same as call in public
 
-    // TODO: what is factory method
+    // TODO: static ~ what is factory method
     static std::unique_ptr<Index> createIndex(IndexType type);
 };
