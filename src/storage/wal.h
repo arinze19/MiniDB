@@ -40,5 +40,5 @@ private:
     void writeUint32(uint32_t value);
 
     static uint8_t readUint8(std::ifstream &f);
-    static uint8_t readUint32(std::ifstream &f);
+    static uint32_t readUint32(std::ifstream &f);
 };

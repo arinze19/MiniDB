@@ -56,7 +56,7 @@ void WAL::logDelete(const std::string &key)
 
 void WAL::writeUint8(uint8_t value)
 {
-    writer.write(reinterpret_cast<const char *>(&value), 1); // treat as pointer to raw bytes | uint8_t* with address 
+    writer.write(reinterpret_cast<const char *>(&value), 1); // treat as pointer to raw bytes | uint8_t* with address
 }
 
 void WAL::writeUint32(uint32_t value)
@@ -71,7 +71,7 @@ void WAL::writeUint32(uint32_t value)
     writer.write(bytes, 4);
 }
 
-uint8_t readUint8(std::ifstream &f)
+uint8_t WAL::readUint8(std::ifstream &f)
 {
     uint8_t value;
     f.read(reinterpret_cast<char *>(&value), 1);
@@ -84,7 +84,7 @@ uint8_t readUint8(std::ifstream &f)
     return value;
 }
 
-uint32_t readUint32(std::ifstream &f)
+uint32_t WAL::readUint32(std::ifstream &f)
 {
     char bytes[4];
 
@@ -100,6 +100,63 @@ uint32_t readUint32(std::ifstream &f)
         static_cast<uint32_t>(static_cast<unsigned char>(bytes[1]) << 16) |
         static_cast<uint32_t>(static_cast<unsigned char>(bytes[2]) << 8) |
         static_cast<uint32_t>(static_cast<unsigned char>(bytes[3])));
+}
+
+std::vector<Record> WAL::replay()
+{
+    std::vector<Record> records;
+
+    if (file_size == 0)
+        return records;
+
+    std::ifstream reader(file_path, std::ios::binary);
+    if (!reader.is_open())
+        return records;
+
+    std::cout << "[WAL] Replaying " << file_size << " bytes of WAL entries..." << std::endl;
+
+    size_t bytes_read = 0;
+    size_t entries_replayed = 0;
+
+    while (bytes_read < file_size && reader.good())
+    {
+        uint8_t operation;
+
+        try
+        {
+            operation = readUint8(reader);
+        }
+        catch (...)
+        {
+            break;
+        }
+
+        uint32_t key_size = readUint32(reader);
+
+        uint32_t value_size = readUint32(reader);
+
+        std::string key('\0', key_size);
+        reader.read(key.data(), key_size);
+
+        std::string value(value_size, '\0');
+        if (value_size > 0)
+        {
+            reader.read(value.data(), value_size);
+        }
+
+        if (reader.fail())
+            break;
+
+        bool is_tombstone = (operation == DELETE);
+        records.push_back(Record{key, value, is_tombstone});
+
+        bytes_read += 1 + 4 + 4 + key_size + value_size;
+        entries_replayed++;
+    }
+
+    std::cout << "[WAL] Replayed " << entries_replayed << std::endl;
+
+    return records;
 }
 
 void WAL::clear()

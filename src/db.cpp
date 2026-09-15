@@ -135,8 +135,6 @@ void MiniDB::flushMemtableInternal()
 
     std::vector<Record> records = memtable->flush();
 
-    size_t first_segment_idx = segment_manager->segmentCount();
-
     for (const auto &record : records)
     {
         auto [segment_idx, offset] = segment_manager->write(record);

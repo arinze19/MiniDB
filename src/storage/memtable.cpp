@@ -77,7 +77,7 @@ std::vector<Record> Memtable::flush()
     {
         records.push_back(Record{
             key,
-            value : entry.tombstone ? "" : entry.value,
+            entry.tombstone ? "" : entry.value,
             entry.tombstone
         });
     }

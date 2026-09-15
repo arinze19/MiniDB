@@ -79,7 +79,7 @@ std::vector<std::tuple<size_t, size_t, Record>> SegmentManager::readAll()
 
     // loop through each segment
     // for each segment, read the records on the index
-    for (int i = 0; i < segments.size(); i++)
+    for (size_t i = 0; i < segments.size(); i++)
     {
         auto records = segments[i]->readAll();
         size_t offset = 0;
