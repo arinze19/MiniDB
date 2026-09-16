@@ -49,11 +49,12 @@ MiniDB::MiniDB(const std::string &dir, IndexType type) : data_dir(dir)
 
     recoverFromWAL();
 
-    std::cout << "[MiniDB] Opened with"
+    std::cout << "[MiniDB] Opened with "
               << (type == IndexType::HASH ? "HashIndex" : "BTreeIndex")
-              << " | Keys: " << index->size() << " keys loaded" << std::endl
-              << " | Segments: " << segment_manager->segmentCount() << std::endl
-              << " | WAL: " << wal->size() << "Bytes" << std::endl;
+              << " | Keys: " << index->size() << " keys loaded"
+              << " | Segments: " << segment_manager->segmentCount()
+              << " | Memtable: " << memtable->sizeBytes() << " Bytes"
+              << " | WAL: " << wal->size() << " Bytes" << std::endl;
 }
 
 void MiniDB::put(const std::string &key, const std::string &value)

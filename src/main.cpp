@@ -127,8 +127,8 @@ int main(int argc, char *argv[])
         {
             std::cout << "Keys: " << db.indexSize() << "\n";
             std::cout << "Segments: " << db.getSegmentCount() << "\n";
-            std::cout << "Memtable: " << db.getMemtableSize() << "\n";
-            std::cout << "WAL: " << db.getWALSize() << "\n";
+            std::cout << "Memtable: " << db.getMemtableSize() << " bytes" << "\n";
+            std::cout << "WAL: " << db.getWALSize() << " bytes" << "\n";
             std::cout << "Index Type: " << (indexType == MiniDB::IndexType::BTREE ? "BTree" : "Hash") << " index" << "\n";
         }
         else if (current_command == "crash")

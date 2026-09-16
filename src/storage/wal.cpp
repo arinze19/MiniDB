@@ -16,7 +16,7 @@ WAL::WAL(const std::string &path) : file_path(path), file_size(0)
 
     if (file_size > 0)
     {
-        std::cout << "[WAL] Found existing WAL (" << file_size << ") ~ crash recovery may be needed" << std::endl;
+        std::cout << "[WAL] Found existing WAL (" << file_size << " Bytes)  ~ crash recovery may be needed" << std::endl;
     }
 };
 
@@ -135,7 +135,7 @@ std::vector<Record> WAL::replay()
 
         uint32_t value_size = readUint32(reader);
 
-        std::string key('\0', key_size);
+        std::string key(key_size, '\0');
         reader.read(key.data(), key_size);
 
         std::string value(value_size, '\0');
@@ -154,7 +154,7 @@ std::vector<Record> WAL::replay()
         entries_replayed++;
     }
 
-    std::cout << "[WAL] Replayed " << entries_replayed << std::endl;
+    std::cout << "[WAL] Replayed " << entries_replayed << " entries" << std::endl;
 
     return records;
 }
